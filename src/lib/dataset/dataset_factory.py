@@ -16,6 +16,7 @@ from .datasets.nuscenes import nuScenes
 from .datasets.crowdhuman import CrowdHuman
 from .datasets.kitti_tracking import KITTITracking
 from .datasets.custom_dataset import CustomDataset
+from .datasets.mot_custom import MOT_Custom
 
 dataset_factory = {
   'custom': CustomDataset,
@@ -23,6 +24,7 @@ dataset_factory = {
   'kitti': KITTI,
   'coco_hp': COCOHP,
   'mot': MOT,
+  'motcustom': MOT_Custom,
   'nuscenes': nuScenes,
   'crowdhuman': CrowdHuman,
   'kitti_tracking': KITTITracking,

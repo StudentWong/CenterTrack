@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import os
 
+from .networks.dla_norm import DLASeg_norm
 from .networks.dla import DLASeg
 from .networks.resdcn import PoseResDCN
 from .networks.resnet import PoseResNet
@@ -16,6 +17,7 @@ from .networks.generic_network import GenericNetwork
 _network_factory = {
   'resdcn': PoseResDCN,
   'dla': DLASeg,
+  'dlanorm': DLASeg_norm,
   'res': PoseResNet,
   'dlav0': DLASegv0,
   'generic': GenericNetwork

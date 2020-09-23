@@ -16,6 +16,9 @@ if __name__ == '__main__':
   for split in SPLITS:
     data_path = DATA_PATH + (split if not HALF_VIDEO else 'train')
     out_path = OUT_PATH + '{}.json'.format(split)
+    # print(out_path)
+    # if not os.path.exists(out_path):
+    #   os.mknod(out_path)
     out = {'images': [], 'annotations': [], 
            'categories': [{'id': 1, 'name': 'pedestrain'}],
            'videos': []}

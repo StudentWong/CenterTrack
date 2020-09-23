@@ -88,6 +88,7 @@ def generic_decode(output, K=100, opt=None):
     output['tracking'] *= 0
   
   heat = output['hm']
+
   batch, cat, height, width = heat.size()
 
   heat = _nms(heat)

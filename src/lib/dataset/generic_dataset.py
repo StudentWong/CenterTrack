@@ -76,6 +76,9 @@ class GenericDataset(data.Dataset):
   def __getitem__(self, index):
     opt = self.opt
     img, anns, img_info, img_path = self._load_data(index)
+    # print(img.shape)
+    # print(anns.shape)
+    # exit()
 
     height, width = img.shape[0], img.shape[1]
     c = np.array([img.shape[1] / 2., img.shape[0] / 2.], dtype=np.float32)

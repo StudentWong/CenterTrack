@@ -16,6 +16,7 @@ class MOT(GenericDataset):
   class_name = ['']
   max_objs = 256
   cat_ids = {1: 1, -1: -1}
+
   def __init__(self, opt, split):
     self.dataset_version = opt.dataset_version
     self.year = int(self.dataset_version[:2])
