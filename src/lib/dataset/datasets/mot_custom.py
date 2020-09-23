@@ -108,8 +108,8 @@ class MOT_Custom(GenericDataset):
       for pre_t_i in range(0, pre_image.shape[0]):
         if opt.same_aug_pre and frame_dist[pre_t_i] != 0:
           trans_input_pre = trans_input
-          trans_input_pres = trans_input_pres + [trans_input_pre]
           trans_output_pre = trans_output
+          trans_input_pres = trans_input_pres + [trans_input_pre]
           trans_output_pres = trans_output_pres + [trans_output_pre]
         else:
           c_pre, aug_s_pre, _ = self._get_aug_param(
@@ -119,19 +119,22 @@ class MOT_Custom(GenericDataset):
             c_pre, s_pre, rot, [opt.input_w, opt.input_h])
           trans_output_pre = get_affine_transform(
             c_pre, s_pre, rot, [opt.output_w, opt.output_h])
-
+          trans_input_pres = trans_input_pres + [trans_input_pre]
+          trans_output_pres = trans_output_pres + [trans_output_pre]
 
       #pre_imgs = self._get_input(pre_image, trans_input_pre)
 
       pre_imgs = []
       for pre_t_i in range(0, pre_image.shape[0]):
-        pre_img = self._get_input(pre_image[pre_t_i, :, :, :], trans_input_pre)
+        pre_img = self._get_input(pre_image[pre_t_i, :, :, :], trans_input_pres[pre_t_i])
         pre_imgs = pre_imgs + [pre_img]
       pre_imgs = np.array(pre_imgs)
       ret['pre_imgs'] = pre_imgs
 
+      # pre_hm, pre_cts, track_ids = self._get_pre_dets(
+      #   pre_anns, trans_input_pre, trans_output_pre)
       pre_hm, pre_cts, track_ids = self._get_pre_dets(
-        pre_anns[-1], trans_input_pre, trans_output_pre)
+        pre_anns[-1], trans_input_pres[-1], trans_output_pres[-1])
 
 
       ret['pre_img'] = pre_imgs[-1]
