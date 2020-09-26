@@ -166,7 +166,11 @@ class MOT_Custom(GenericDataset):
       pre_cts_fix = np.zeros((opt.History_T, opt.K, 2), dtype=np.float)
 
       for pre_len_i in range(0, pre_image.shape[0]):
+        if len(pre_cts_s[pre_len_i]) == 0:
+          continue
+        # print(pre_cts_s[pre_len_i])
         centers = np.array(pre_cts_s[pre_len_i])
+        # print(centers.shape)
         num = ret['pre_len'][pre_len_i] if ret['pre_len'][pre_len_i] <= opt.K else opt.K
         pre_cts_fix[pre_len_i, 0:num, :] = centers[0:num, :]
 

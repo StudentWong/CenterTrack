@@ -188,7 +188,14 @@ class Trainer_Custom(object):
           ret_ft[iterator_i, iterator_o, :] = ft_o
 
     assert ret_ft.is_contiguous()
-    return ret_ft.view(N, T, Om, Channel_O).detach().requires_grad_(False)
+    ret = ret_ft.view(N, T, Om, Channel_O).detach().requires_grad_(False)
+    del ret_ft
+    del pre_imgs
+    del hidden_ft
+    del pre_cts_fix_viewed
+    del pre_imgs_viewed
+    torch.cuda.empty_cache()
+    return ret
 
 
 
