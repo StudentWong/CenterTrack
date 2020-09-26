@@ -5,7 +5,10 @@ from __future__ import print_function
 
 import pycocotools.coco as coco
 from pycocotools.cocoeval import COCOeval
-from pyquaternion import Quaternion
+try:
+  from pyquaternion import Quaternion
+except:
+  pass
 import numpy as np
 import torch
 import json

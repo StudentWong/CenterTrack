@@ -50,6 +50,7 @@ class GenericDataset(data.Dataset):
   ignore_val = 1
   nuscenes_att_range = {0: [0, 1], 1: [0, 1], 2: [2, 3, 4], 3: [2, 3, 4], 
     4: [2, 3, 4], 5: [5, 6, 7], 6: [5, 6, 7], 7: [5, 6, 7]}
+
   def __init__(self, opt=None, split=None, ann_path=None, img_dir=None):
     super(GenericDataset, self).__init__()
     if opt is not None and split is not None:
@@ -218,16 +219,19 @@ class GenericDataset(data.Dataset):
          ('iscrowd' in ann and ann['iscrowd'] > 0):
         continue
       bbox = self._coco_box_to_bbox(ann['bbox'])
+
       bbox[:2] = affine_transform(bbox[:2], trans)
       bbox[2:] = affine_transform(bbox[2:], trans)
       bbox[[0, 2]] = np.clip(bbox[[0, 2]], 0, hm_w - 1)
       bbox[[1, 3]] = np.clip(bbox[[1, 3]], 0, hm_h - 1)
       h, w = bbox[3] - bbox[1], bbox[2] - bbox[0]
       max_rad = 1
+
       if (h > 0 and w > 0):
         radius = gaussian_radius((math.ceil(h), math.ceil(w)))
         radius = max(0, int(radius)) 
         max_rad = max(max_rad, radius)
+
         ct = np.array(
           [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2], dtype=np.float32)
         ct0 = ct.copy()
@@ -238,7 +242,8 @@ class GenericDataset(data.Dataset):
         conf = 1 if np.random.random() > self.opt.lost_disturb else 0
         
         ct_int = ct.astype(np.int32)
-        if conf == 0:
+        # if conf == 0:
+        if conf == 1:
           pre_cts.append(ct / down_ratio)
         else:
           pre_cts.append(ct0 / down_ratio)
@@ -246,6 +251,7 @@ class GenericDataset(data.Dataset):
         track_ids.append(ann['track_id'] if 'track_id' in ann else -1)
         if reutrn_hm:
           draw_umich_gaussian(pre_hm[0], ct_int, radius, k=conf)
+
 
         if np.random.random() < self.opt.fp_disturb and reutrn_hm:
           ct2 = ct0.copy()
@@ -275,7 +281,8 @@ class GenericDataset(data.Dataset):
       sf = self.opt.scale
       cf = self.opt.shift
       if type(s) == float:
-        s = [s, s]
+        # s = [s, s]
+        s = np.array(s, dtype=np.float)
       c[0] += s * np.clip(np.random.randn()*cf, -2*cf, 2*cf)
       c[1] += s * np.clip(np.random.randn()*cf, -2*cf, 2*cf)
       aug_s = np.clip(np.random.randn()*sf + 1, 1 - sf, 1 + sf)

@@ -13,6 +13,7 @@ from torch import nn
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 
+from .attention import TimeAttention
 from .base_model import BaseModel
 
 try:
@@ -623,7 +624,36 @@ class DLASeg_norm(BaseModel):
             out_channel, channels[self.first_level:self.last_level], 
             [2 ** i for i in range(self.last_level - self.first_level)],
             node_type=self.node_type)
-        
+        self.time_att = TimeAttention(opt, 64)
+
+    def forward(self, x, pre_obj_ft, pre_img=None, pre_hm=None):
+      # print(pre_obj_ft.shape)
+      # exit()
+      if (pre_hm is not None) or (pre_img is not None):
+        feats = self.imgpre2feats(x, pre_img, pre_hm)
+      else:
+        feats = self.img2feats(x)
+      out = []
+
+      if self.opt.model_output_list:
+        for s in range(self.num_stacks):
+          z = []
+          for head in sorted(self.heads):
+              z.append(self.__getattr__(head)(feats[s]))
+          out.append(z)
+      else:
+        for s in range(self.num_stacks):
+          z = {}
+          for head in self.heads:
+            if head == 'hm':
+              att_ft = self.time_att(pre_obj_ft, feats[s])
+              assert att_ft.shape == feats[s].shape
+              z['hm_old'] = self.__getattr__(head)(att_ft)
+              z['hm_new'] = self.__getattr__(head)(feats[s] - att_ft)
+            else:
+              z[head] = self.__getattr__(head)(feats[s])
+          out.append(z)
+      return out
 
     def img2feats(self, x):
         x = self.base(x)

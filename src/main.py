@@ -13,6 +13,7 @@ from model.data_parallel import DataParallel
 from logger import Logger
 from dataset.dataset_factory import get_dataset
 from trainer import Trainer
+from trainer_custom import Trainer_Custom
 
 def get_optimizer(opt, model):
   if opt.optim == 'adam':
@@ -44,7 +45,10 @@ def main(opt):
     model, optimizer, start_epoch = load_model(
       model, opt.load_model, opt, optimizer)
 
-  trainer = Trainer(opt, model, optimizer)
+  if opt.arch == 'dlanorm_34':
+    trainer = Trainer_Custom(opt, model, optimizer)
+  else:
+    trainer = Trainer(opt, model, optimizer)
   trainer.set_device(opt.gpus, opt.chunk_sizes, opt.device)
   
   if opt.val_intervals < opt.num_epochs or opt.test:
@@ -65,6 +69,7 @@ def main(opt):
   )
 
   print('Starting training...')
+  best = 1e10
   for epoch in range(start_epoch + 1, opt.num_epochs + 1):
     mark = epoch if opt.save_all else 'last'
     log_dict_train, _ = trainer.train(epoch, train_loader)
@@ -82,6 +87,11 @@ def main(opt):
       for k, v in log_dict_val.items():
         logger.scalar_summary('val_{}'.format(k), v, epoch)
         logger.write('{} {:8f} | '.format(k, v))
+      if log_dict_val['tot'] < best:
+        best = log_dict_val[opt.metric]
+        save_model(os.path.join(opt.save_dir, 'model_best.pth'),
+                   epoch, model)
+
     else:
       save_model(os.path.join(opt.save_dir, 'model_last.pth'), 
                  epoch, model, optimizer)

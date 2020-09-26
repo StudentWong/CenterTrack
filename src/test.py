@@ -32,6 +32,7 @@ class PrefetchDataset(torch.utils.data.Dataset):
     img_id = self.images[index]
     img_info = self.load_image_func(ids=[img_id])[0]
     img_path = os.path.join(self.img_dir, img_info['file_name'])
+    # print(img_path)
     image = cv2.imread(img_path)
     images, meta = {}, {}
     for scale in opt.test_scales:
@@ -56,7 +57,7 @@ def prefetch_test(opt):
     os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpus_str
   Dataset = dataset_factory[opt.test_dataset]
   opt = opts().update_dataset_info_and_set_heads(opt, Dataset)
-  print(opt)
+  # print(opt)
   Logger(opt)
   
   split = 'val' if not opt.trainval else 'test'

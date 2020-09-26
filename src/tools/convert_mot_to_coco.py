@@ -8,13 +8,13 @@ import cv2
 DATA_PATH = '../../data/mot17/'
 OUT_PATH = DATA_PATH + 'annotations/'
 SPLITS = ['train_half', 'val_half', 'train', 'test']
-HALF_VIDEO = True
+HALF_VIDEO = [True, True, True, False]
 CREATE_SPLITTED_ANN = True
 CREATE_SPLITTED_DET = True
 
 if __name__ == '__main__':
-  for split in SPLITS:
-    data_path = DATA_PATH + (split if not HALF_VIDEO else 'train')
+  for snum, split in enumerate(SPLITS):
+    data_path = DATA_PATH + (split if not HALF_VIDEO[snum] else 'train')
     out_path = OUT_PATH + '{}.json'.format(split)
     # print(out_path)
     # if not os.path.exists(out_path):
@@ -23,6 +23,7 @@ if __name__ == '__main__':
            'categories': [{'id': 1, 'name': 'pedestrain'}],
            'videos': []}
     seqs = os.listdir(data_path)
+    print(seqs)
     image_cnt = 0
     ann_cnt = 0
     video_cnt = 0
@@ -40,7 +41,7 @@ if __name__ == '__main__':
       ann_path = seq_path + 'gt/gt.txt'
       images = os.listdir(img_path)
       num_images = len([image for image in images if 'jpg' in image])
-      if HALF_VIDEO and ('half' in split):
+      if HALF_VIDEO[snum] and ('half' in split):
         image_range = [0, num_images // 2] if 'train' in split else \
           [num_images // 2 + 1, num_images - 1]
       else:
@@ -119,7 +120,7 @@ if __name__ == '__main__':
       image_cnt += num_images
     print('loaded {} for {} images and {} samples'.format(
       split, len(out['images']), len(out['annotations'])))
-    json.dump(out, open(out_path, 'w'))
+    json.dump(out, open(out_path, 'w'), indent=4)
         
         
 

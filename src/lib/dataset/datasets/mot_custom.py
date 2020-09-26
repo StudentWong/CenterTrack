@@ -9,7 +9,8 @@ import json
 import os
 from collections import defaultdict
 from ..generic_dataset import GenericDataset
-from utils.image import get_affine_transform, affine_transform
+from utils.image import get_affine_transform, affine_transform, gaussian_radius, draw_umich_gaussian
+import math
 
 class MOT_Custom(GenericDataset):
   num_categories = 1
@@ -79,7 +80,7 @@ class MOT_Custom(GenericDataset):
 
       pre_image, pre_anns, frame_dist = self._load_multi_pre_data(
         img_info['video_id'], img_info['frame_id'],
-        img_info['sensor_id'] if 'sensor_id' in img_info else 1)
+        img_info['sensor_id'] if 'sensor_id' in img_info else 1, pre_num=opt.History_T)
       pre_image = np.array(pre_image)
 
       # if flipped:
@@ -123,6 +124,7 @@ class MOT_Custom(GenericDataset):
           trans_output_pres = trans_output_pres + [trans_output_pre]
 
       #pre_imgs = self._get_input(pre_image, trans_input_pre)
+      assert pre_image.shape[0] == opt.History_T
 
       pre_imgs = []
       for pre_t_i in range(0, pre_image.shape[0]):
@@ -133,16 +135,48 @@ class MOT_Custom(GenericDataset):
 
       # pre_hm, pre_cts, track_ids = self._get_pre_dets(
       #   pre_anns, trans_input_pre, trans_output_pre)
-      pre_hm, pre_cts, track_ids = self._get_pre_dets(
-        pre_anns[-1], trans_input_pres[-1], trans_output_pres[-1])
+
+      pre_hms = []
+      pre_cts_s = []
+      track_ids_s = []
+      for pre_t_i in range(0, pre_image.shape[0]):
+        pre_hm, pre_cts, track_ids = self._get_pre_dets(
+          pre_anns[pre_t_i], trans_input_pres[pre_t_i], trans_output_pres[pre_t_i])
+        # print(track_ids)
+        pre_hms = pre_hms + [pre_hm]
+        pre_cts_s = pre_cts_s + [pre_cts]
+        track_ids_s = track_ids_s + [track_ids]
+
+      pre_hm = pre_hms[-1]
+      pre_cts = pre_cts_s[-1]
+      track_ids = track_ids_s[-1]
+
+      # for cts in pre_cts:
+      #   print(pre_hm[0, round(cts[1] * 4), round(cts[0] * 4)])
+      #   print(pre_hm.shape)
+      #   # print(cts)
 
 
+      # print(len(pre_anns[-1]))
+      pre_lens = []
+      for pre_len_i in range(0, pre_image.shape[0]):
+        pre_lens = pre_lens + [len(pre_cts_s[pre_len_i]) if len(pre_cts_s[pre_len_i])<=opt.K else opt.K]
+      ret['pre_len'] = np.array(pre_lens, dtype=np.int)
+
+      pre_cts_fix = np.zeros((opt.History_T, opt.K, 2), dtype=np.float)
+
+      for pre_len_i in range(0, pre_image.shape[0]):
+        centers = np.array(pre_cts_s[pre_len_i])
+        num = ret['pre_len'][pre_len_i] if ret['pre_len'][pre_len_i] <= opt.K else opt.K
+        pre_cts_fix[pre_len_i, 0:num, :] = centers[0:num, :]
+
+      ret['pre_cts_fix'] = pre_cts_fix
       ret['pre_img'] = pre_imgs[-1]
       if opt.pre_hm:
         ret['pre_hm'] = pre_hm
 
     ### init samples
-    self._init_ret(ret, gt_det)
+    self._init_ret_new_and_old(ret, gt_det)
     calib = self._get_calib(img_info, width, height)
 
     num_objs = min(len(anns), self.max_objs)
@@ -156,9 +190,19 @@ class MOT_Custom(GenericDataset):
       if cls_id <= 0 or ('iscrowd' in ann and ann['iscrowd'] > 0):
         self._mask_ignore_or_crowd(ret, cls_id, bbox)
         continue
-      self._add_instance(
+      # print('before:')
+      # print(ret['hm'].mean())
+      self._add_instance_new_and_old(
         ret, gt_det, k, cls_id, bbox, bbox_amodal, ann, trans_output, aug_s,
         calib, pre_cts, track_ids)
+      # print('after:')
+      # print(ret['hm'].mean())
+    # print('old:')
+    # print(ret['hm_old'].mean())
+    # print('new:')
+    # print(ret['hm_new'].mean())
+    # print('hm:')
+    # print(ret['hm'].mean())
 
     if self.opt.debug > 0:
       gt_det = self._format_gt_det(gt_det)
@@ -203,6 +247,158 @@ class MOT_Custom(GenericDataset):
       frame_dists = frame_dists + [frame_dist]
 
     return imgs, anns_s, frame_dists
+
+  def _add_instance_new_and_old(
+          self, ret, gt_det, k, cls_id, bbox, bbox_amodal, ann, trans_output,
+          aug_s, calib, pre_cts=None, track_ids=None):
+    h, w = bbox[3] - bbox[1], bbox[2] - bbox[0]
+    if h <= 0 or w <= 0:
+      return
+    radius = gaussian_radius((math.ceil(h), math.ceil(w)))
+    radius = max(0, int(radius))
+    ct = np.array(
+      [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2], dtype=np.float32)
+    ct_int = ct.astype(np.int32)
+    ret['cat'][k] = cls_id - 1
+    ret['mask'][k] = 1
+    if 'wh' in ret:
+      ret['wh'][k] = 1. * w, 1. * h
+      ret['wh_mask'][k] = 1
+    ret['ind'][k] = ct_int[1] * self.opt.output_w + ct_int[0]
+    ret['reg'][k] = ct - ct_int
+    ret['reg_mask'][k] = 1
+    draw_umich_gaussian(ret['hm'][cls_id - 1], ct_int, radius)
+
+    gt_det['bboxes'].append(
+      np.array([ct[0] - w / 2, ct[1] - h / 2,
+                ct[0] + w / 2, ct[1] + h / 2], dtype=np.float32))
+    gt_det['scores'].append(1)
+    gt_det['clses'].append(cls_id - 1)
+    gt_det['cts'].append(ct)
+
+
+    if 'tracking' in self.opt.heads:
+      # print('True')
+      # print(ann['track_id'])
+      # print(track_ids)
+      if ann['track_id'] in track_ids:
+        pre_ct = pre_cts[track_ids.index(ann['track_id'])]
+        ret['tracking_mask'][k] = 1
+        ret['tracking'][k] = pre_ct - ct_int
+        gt_det['tracking'].append(ret['tracking'][k])
+        # print('draw')
+        draw_umich_gaussian(ret['hm_old'][cls_id - 1], ct_int, radius)
+
+      else:
+        gt_det['tracking'].append(np.zeros(2, np.float32))
+
+        draw_umich_gaussian(ret['hm_new'][cls_id - 1], ct_int, radius)
+
+    if 'ltrb' in self.opt.heads:
+      ret['ltrb'][k] = bbox[0] - ct_int[0], bbox[1] - ct_int[1], \
+                       bbox[2] - ct_int[0], bbox[3] - ct_int[1]
+      ret['ltrb_mask'][k] = 1
+
+    if 'ltrb_amodal' in self.opt.heads:
+      ret['ltrb_amodal'][k] = \
+        bbox_amodal[0] - ct_int[0], bbox_amodal[1] - ct_int[1], \
+        bbox_amodal[2] - ct_int[0], bbox_amodal[3] - ct_int[1]
+      ret['ltrb_amodal_mask'][k] = 1
+      gt_det['ltrb_amodal'].append(bbox_amodal)
+
+    if 'nuscenes_att' in self.opt.heads:
+      if ('attributes' in ann) and ann['attributes'] > 0:
+        att = int(ann['attributes'] - 1)
+        ret['nuscenes_att'][k][att] = 1
+        ret['nuscenes_att_mask'][k][self.nuscenes_att_range[att]] = 1
+      gt_det['nuscenes_att'].append(ret['nuscenes_att'][k])
+
+    if 'velocity' in self.opt.heads:
+      if ('velocity' in ann) and min(ann['velocity']) > -1000:
+        ret['velocity'][k] = np.array(ann['velocity'], np.float32)[:3]
+        ret['velocity_mask'][k] = 1
+      gt_det['velocity'].append(ret['velocity'][k])
+
+    if 'hps' in self.opt.heads:
+      self._add_hps(ret, k, ann, gt_det, trans_output, ct_int, bbox, h, w)
+
+    if 'rot' in self.opt.heads:
+      self._add_rot(ret, ann, k, gt_det)
+
+    if 'dep' in self.opt.heads:
+      if 'depth' in ann:
+        ret['dep_mask'][k] = 1
+        ret['dep'][k] = ann['depth'] * aug_s
+        gt_det['dep'].append(ret['dep'][k])
+      else:
+        gt_det['dep'].append(2)
+
+    if 'dim' in self.opt.heads:
+      if 'dim' in ann:
+        ret['dim_mask'][k] = 1
+        ret['dim'][k] = ann['dim']
+        gt_det['dim'].append(ret['dim'][k])
+      else:
+        gt_det['dim'].append([1, 1, 1])
+
+    if 'amodel_offset' in self.opt.heads:
+      if 'amodel_center' in ann:
+        amodel_center = affine_transform(ann['amodel_center'], trans_output)
+        ret['amodel_offset_mask'][k] = 1
+        ret['amodel_offset'][k] = amodel_center - ct_int
+        gt_det['amodel_offset'].append(ret['amodel_offset'][k])
+      else:
+        gt_det['amodel_offset'].append([0, 0])
+
+
+  def _init_ret_new_and_old(self, ret, gt_det):
+    max_objs = self.max_objs * self.opt.dense_reg
+    ret['hm'] = np.zeros(
+      (self.opt.num_classes, self.opt.output_h, self.opt.output_w),
+      np.float32)
+
+    ret['hm_new'] = np.zeros(
+      (self.opt.num_classes, self.opt.output_h, self.opt.output_w),
+      np.float32)
+    ret['hm_old'] = np.zeros(
+      (self.opt.num_classes, self.opt.output_h, self.opt.output_w),
+      np.float32)
+
+    ret['ind'] = np.zeros((max_objs), dtype=np.int64)
+    ret['cat'] = np.zeros((max_objs), dtype=np.int64)
+    ret['mask'] = np.zeros((max_objs), dtype=np.float32)
+
+    regression_head_dims = {
+      'reg': 2, 'wh': 2, 'tracking': 2, 'ltrb': 4, 'ltrb_amodal': 4,
+      'nuscenes_att': 8, 'velocity': 3, 'hps': self.num_joints * 2,
+      'dep': 1, 'dim': 3, 'amodel_offset': 2}
+
+    for head in regression_head_dims:
+      if head in self.opt.heads:
+        ret[head] = np.zeros(
+          (max_objs, regression_head_dims[head]), dtype=np.float32)
+        ret[head + '_mask'] = np.zeros(
+          (max_objs, regression_head_dims[head]), dtype=np.float32)
+        gt_det[head] = []
+
+    if 'hm_hp' in self.opt.heads:
+      num_joints = self.num_joints
+      ret['hm_hp'] = np.zeros(
+        (num_joints, self.opt.output_h, self.opt.output_w), dtype=np.float32)
+      ret['hm_hp_mask'] = np.zeros(
+        (max_objs * num_joints), dtype=np.float32)
+      ret['hp_offset'] = np.zeros(
+        (max_objs * num_joints, 2), dtype=np.float32)
+      ret['hp_ind'] = np.zeros((max_objs * num_joints), dtype=np.int64)
+      ret['hp_offset_mask'] = np.zeros(
+        (max_objs * num_joints, 2), dtype=np.float32)
+      ret['joint'] = np.zeros((max_objs * num_joints), dtype=np.int64)
+
+    if 'rot' in self.opt.heads:
+      ret['rotbin'] = np.zeros((max_objs, 2), dtype=np.int64)
+      ret['rotres'] = np.zeros((max_objs, 2), dtype=np.float32)
+      ret['rot_mask'] = np.zeros((max_objs), dtype=np.float32)
+      gt_det.update({'rot': []})
 
   def _to_float(self, x):
     return float("{:.2f}".format(x))

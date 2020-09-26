@@ -128,7 +128,7 @@ class opts(object):
                              help='batch size on the master gpu.')
     self.parser.add_argument('--num_iters', type=int, default=-1,
                              help='default: #samples / batch_size.')
-    self.parser.add_argument('--val_intervals', type=int, default=10000,
+    self.parser.add_argument('--val_intervals', type=int, default=1,
                              help='number of epochs to run validation.')
     self.parser.add_argument('--trainval', action='store_true',
                              help='include validation in training and '
@@ -151,7 +151,9 @@ class opts(object):
     self.parser.add_argument('--nms', action='store_true',
                              help='run nms in testing.')
     self.parser.add_argument('--K', type=int, default=100,
-                             help='max number of output objects.') 
+                             help='max number of output objects.')
+    self.parser.add_argument('--History_T', type=int, default=4,
+                             help='max time capacity of history objects.')
     self.parser.add_argument('--not_prefetch_test', action='store_true',
                              help='not use parallal data pre-processing.')
     self.parser.add_argument('--fix_short', type=int, default=-1)
