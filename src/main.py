@@ -88,7 +88,7 @@ def main(opt):
         logger.scalar_summary('val_{}'.format(k), v, epoch)
         logger.write('{} {:8f} | '.format(k, v))
       if log_dict_val['tot'] < best:
-        best = log_dict_val[opt.metric]
+        best = log_dict_val['tot']
         save_model(os.path.join(opt.save_dir, 'model_best.pth'),
                    epoch, model)
 

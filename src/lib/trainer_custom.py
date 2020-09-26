@@ -49,13 +49,16 @@ class GenericLoss(torch.nn.Module):
       output = outputs[s]
       output = self._sigmoid_output(output)
 
-      if 'hm_old' in output and 'hm_new' in output:
+      if 'hm_old' in output and 'hm_new' in output and (not 'hm' in output):
+
+        # print(batch['cat'])
+
         losses['hm'] += (self.crit(
-          output['hm_old'], batch['hm_old'], batch['ind'],
-          batch['mask'], batch['cat']) +
+          output['hm_old'], batch['hm_old'], batch['ind_old'],
+          batch['mask_old'], batch['cat_old']) +
                          self.crit(
-          output['hm_new'], batch['hm_new'], batch['ind'],
-          batch['mask'], batch['cat'])) / opt.num_stacks
+          output['hm_new'], batch['hm_new'], batch['ind_new'],
+          batch['mask_new'], batch['cat_new'])) / opt.num_stacks
       elif 'hm' in output:
         losses['hm'] += self.crit(
           output['hm'], batch['hm'], batch['ind'],
@@ -159,11 +162,47 @@ class Trainer_Custom(object):
     ft_H = int(origin_H / 4)
     ft_W = int(origin_W / 4)
 
-    with torch.no_grad():
+    if self.opt.Freeze_ft:
+      with torch.no_grad():
+        assert pre_imgs.is_contiguous()
+        pre_imgs_viewed = pre_imgs.view(N*T, 3, origin_H, origin_W)
+        hidden_ft = self.model_with_loss.model.img2feats(pre_imgs_viewed)[-1]
+
+        assert hidden_ft.shape[0] == N*T \
+               and hidden_ft.shape[2] == int(origin_H/4) \
+               and hidden_ft.shape[3] == int(origin_W/4)
+        Channel_O = hidden_ft.shape[1]
+        assert pre_cts_fix.is_contiguous()
+        pre_cts_fix_viewed = pre_cts_fix.view(N*T, Om, 2)
+        assert pre_len.is_contiguous()
+        pre_len_viewed = pre_len.view(N*T)
+        ret_ft = torch.zeros((N*T, Om, Channel_O))
+        ret_ft = ret_ft.to(device=self.opt.device, non_blocking=True)
+        for iterator_i in range(0, N*T):
+          this_len = pre_len_viewed[iterator_i].detach().cpu().numpy()
+          # print(pre_len_viewed[iterator_i].detach().cpu().numpy())
+          for iterator_o in range(0, this_len):
+            H_o = pre_cts_fix_viewed[iterator_i, iterator_o, 1].detach().cpu().numpy()
+            W_o = pre_cts_fix_viewed[iterator_i, iterator_o, 0].detach().cpu().numpy()
+
+
+            ft_o = hidden_ft[iterator_i, :,
+                   int(np.rint(H_o)) if int(np.rint(H_o)) < ft_H else ft_H-1,
+                   int(np.rint(W_o)) if int(np.rint(W_o)) < ft_W else ft_W-1]
+            ret_ft[iterator_i, iterator_o, :] = ft_o
+
+      assert ret_ft.is_contiguous()
+      ret = ret_ft.view(N, T, Om, Channel_O).detach().requires_grad_(False)
+      del ret_ft
+      del pre_imgs
+      del hidden_ft
+      del pre_cts_fix_viewed
+      del pre_imgs_viewed
+      torch.cuda.empty_cache()
+    else:
       assert pre_imgs.is_contiguous()
       pre_imgs_viewed = pre_imgs.view(N*T, 3, origin_H, origin_W)
       hidden_ft = self.model_with_loss.model.img2feats(pre_imgs_viewed)[-1]
-
       assert hidden_ft.shape[0] == N*T \
              and hidden_ft.shape[2] == int(origin_H/4) \
              and hidden_ft.shape[3] == int(origin_W/4)
@@ -187,14 +226,9 @@ class Trainer_Custom(object):
                  int(np.rint(W_o)) if int(np.rint(W_o)) < ft_W else ft_W-1]
           ret_ft[iterator_i, iterator_o, :] = ft_o
 
-    assert ret_ft.is_contiguous()
-    ret = ret_ft.view(N, T, Om, Channel_O).detach().requires_grad_(False)
-    del ret_ft
-    del pre_imgs
-    del hidden_ft
-    del pre_cts_fix_viewed
-    del pre_imgs_viewed
-    torch.cuda.empty_cache()
+      assert ret_ft.is_contiguous()
+      ret = ret_ft.view(N, T, Om, Channel_O)
+
     return ret
 
 

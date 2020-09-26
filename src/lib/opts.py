@@ -154,6 +154,8 @@ class opts(object):
                              help='max number of output objects.')
     self.parser.add_argument('--History_T', type=int, default=4,
                              help='max time capacity of history objects.')
+    self.parser.add_argument('--Freeze_ft', type=bool, default=False,
+                             help='Freeze_ft.')
     self.parser.add_argument('--not_prefetch_test', action='store_true',
                              help='not use parallal data pre-processing.')
     self.parser.add_argument('--fix_short', type=int, default=-1)

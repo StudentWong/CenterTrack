@@ -292,11 +292,17 @@ class MOT_Custom(GenericDataset):
         gt_det['tracking'].append(ret['tracking'][k])
         # print('draw')
         draw_umich_gaussian(ret['hm_old'][cls_id - 1], ct_int, radius)
+        ret['ind_old'][k] = ct_int[1] * self.opt.output_w + ct_int[0]
+        ret['cat_old'][k] = cls_id - 1
+        ret['mask_old'][k] = 1
 
       else:
         gt_det['tracking'].append(np.zeros(2, np.float32))
 
         draw_umich_gaussian(ret['hm_new'][cls_id - 1], ct_int, radius)
+        ret['ind_new'][k] = ct_int[1] * self.opt.output_w + ct_int[0]
+        ret['cat_new'][k] = cls_id - 1
+        ret['mask_new'][k] = 1
 
     if 'ltrb' in self.opt.heads:
       ret['ltrb'][k] = bbox[0] - ct_int[0], bbox[1] - ct_int[1], \
@@ -371,6 +377,14 @@ class MOT_Custom(GenericDataset):
     ret['ind'] = np.zeros((max_objs), dtype=np.int64)
     ret['cat'] = np.zeros((max_objs), dtype=np.int64)
     ret['mask'] = np.zeros((max_objs), dtype=np.float32)
+
+    ret['ind_old'] = np.zeros((max_objs), dtype=np.int64)
+    ret['cat_old'] = np.zeros((max_objs), dtype=np.int64)
+    ret['mask_old'] = np.zeros((max_objs), dtype=np.float32)
+
+    ret['ind_new'] = np.zeros((max_objs), dtype=np.int64)
+    ret['cat_new'] = np.zeros((max_objs), dtype=np.int64)
+    ret['mask_new'] = np.zeros((max_objs), dtype=np.float32)
 
     regression_head_dims = {
       'reg': 2, 'wh': 2, 'tracking': 2, 'ltrb': 4, 'ltrb_amodal': 4,
